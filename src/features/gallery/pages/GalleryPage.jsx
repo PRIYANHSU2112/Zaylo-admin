@@ -1,289 +1,131 @@
 import React, { useState } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
-import { Plus, Edit, Trash, Eye } from 'lucide-react'
+import { Plus, Edit, Trash } from 'lucide-react'
 import {
-  addGalleryImage,
-  editGalleryImage,
-  deleteGalleryImage,
-  bulkDeleteGalleryImages
-} from '../../../store/slices/gallerySlice'
+  useGetGalleryQuery,
+  useCreateGalleryItemMutation,
+  useUpdateGalleryItemMutation,
+  useDeleteGalleryItemMutation,
+} from '../../../store/api/content.api'
 import Button from '../../../components/ui/Button'
 import { Input } from '../../../components/ui/Input'
 import Select from '../../../components/ui/Select'
 import Modal from '../../../components/ui/Modal'
 import AdminTable from '../../../components/shared/AdminTable'
+import PageSkeleton from '../../../components/shared/PageSkeleton'
 
 export default function GalleryPage() {
-  const dispatch = useDispatch()
-  const gallery = useSelector(state => state.gallery.items)
+  const { data: env, isLoading, isError, error } = useGetGalleryQuery({ limit: 100 })
+  const [createItem, { isLoading: creating }] = useCreateGalleryItemMutation()
+  const [updateItem, { isLoading: updating }] = useUpdateGalleryItemMutation()
+  const [deleteItem] = useDeleteGalleryItemMutation()
+  const items = env?.data || []
 
-  // Local States
+  const empty = { id: '', url: '', title: '', category: 'Products' }
   const [modalOpen, setModalOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
-  const [selectedImage, setSelectedImage] = useState(null)
-  const [previewModalOpen, setPreviewModalOpen] = useState(false)
+  const [form, setForm] = useState(empty)
+  const [formError, setFormError] = useState('')
 
-  // Filter States
-  const [categoryFilter, setCategoryFilter] = useState('all')
+  const onChange = (e) => setForm((p) => ({ ...p, [e.target.name]: e.target.value }))
 
-  // Form State
-  const initialFormState = {
-    id: '',
-    title: '',
-    category: 'Products',
-    url: 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?q=80&w=800&auto=format&fit=crop'
-  }
-  const [formValues, setFormValues] = useState(initialFormState)
-  const [formErrors, setFormErrors] = useState({})
-
-  // Apply filters
-  const filteredGallery = gallery.filter(g => {
-    return categoryFilter === 'all' || g.category === categoryFilter
-  })
-
-  // Handlers
-  const handleOpenAdd = () => {
-    setFormValues(initialFormState)
-    setFormErrors({})
-    setIsEditing(false)
-    setModalOpen(true)
-  }
-
-  const handleOpenEdit = (img) => {
-    setFormValues(img)
-    setFormErrors({})
-    setIsEditing(true)
-    setModalOpen(true)
-  }
-
-  const handleOpenPreview = (img) => {
-    setSelectedImage(img)
-    setPreviewModalOpen(true)
-  }
-
-  const handleDelete = (id) => {
-    if (confirm('Are you sure you want to delete this gallery photo?')) {
-      dispatch(deleteGalleryImage(id))
-    }
-  }
-
-  const handleFormChange = (e) => {
-    const { name, value } = e.target
-    setFormValues(prev => ({ ...prev, [name]: value }))
-    if (formErrors[name]) {
-      setFormErrors(prev => ({ ...prev, [name]: '' }))
-    }
-  }
-
-  const validateForm = () => {
-    const errors = {}
-    if (!formValues.title.trim()) errors.title = 'Title is required'
-    if (!formValues.url.trim()) errors.url = 'Image URL is required'
-    setFormErrors(errors)
-    return Object.keys(errors).length === 0
-  }
-
-  const handleSaveImage = (e) => {
+  const save = async (e) => {
     e.preventDefault()
-    if (!validateForm()) return
-
-    if (isEditing) {
-      dispatch(editGalleryImage(formValues))
-    } else {
-      dispatch(addGalleryImage(formValues))
+    if (!form.url.trim() || !form.title.trim()) {
+      setFormError('URL and title are required')
+      return
     }
-    setModalOpen(false)
+    try {
+      const body = { url: form.url, title: form.title, category: form.category }
+      if (isEditing) await updateItem({ id: form.id, ...body }).unwrap()
+      else await createItem(body).unwrap()
+      setModalOpen(false)
+    } catch (err) {
+      setFormError(err?.data?.message || 'Failed to save')
+    }
   }
 
-  // Table Headers
   const headers = [
     {
       key: 'url',
-      label: 'Image Preview',
+      label: 'Image',
       render: (val, row) => (
-        <div className="w-20 h-12 bg-muted rounded overflow-hidden border border-border flex items-center justify-center cursor-pointer" onClick={() => handleOpenPreview(row)}>
-          <img
-            src={val}
-            alt={row.title}
-            className="w-full h-full object-cover hover:scale-110 transition-transform duration-200"
-          />
+        <div className="flex items-center gap-3">
+          <img src={val} alt={row.title} className="w-12 h-12 rounded-lg object-cover border border-border" />
+          <p className="font-semibold">{row.title}</p>
         </div>
-      )
+      ),
     },
-    {
-      key: 'title',
-      label: 'Asset Title',
-      sortable: true,
-      render: (val) => <span className="font-semibold text-foreground">{val}</span>
-    },
-    {
-      key: 'category',
-      label: 'Category Tag',
-      sortable: true,
-      render: (val) => (
-        <span className="text-xs font-bold px-2 py-0.5 bg-muted rounded border border-border text-muted-foreground capitalize">
-          {val}
-        </span>
-      )
-    },
+    { key: 'category', label: 'Category', sortable: true },
     {
       key: 'actions',
       label: 'Actions',
       align: 'right',
-      render: (val, row) => (
-        <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+      render: (_v, row) => (
+        <div className="flex justify-end gap-1.5">
           <button
-            onClick={() => handleOpenPreview(row)}
-            className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary-light rounded-lg transition-colors cursor-pointer"
-            title="Preview Photo"
-          >
-            <Eye size={16} />
-          </button>
-          <button
-            onClick={() => handleOpenEdit(row)}
-            className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary-light rounded-lg transition-colors cursor-pointer"
-            title="Edit Asset"
+            onClick={() => {
+              setForm(row)
+              setIsEditing(true)
+              setFormError('')
+              setModalOpen(true)
+            }}
+            className="p-1.5 hover:text-primary cursor-pointer"
           >
             <Edit size={16} />
           </button>
           <button
-            onClick={() => handleDelete(row.id)}
-            className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-colors cursor-pointer"
-            title="Delete Asset"
+            onClick={() => {
+              if (confirm('Delete image?')) deleteItem(row.id)
+            }}
+            className="p-1.5 hover:text-red-500 cursor-pointer"
           >
             <Trash size={16} />
           </button>
         </div>
-      )
-    }
+      ),
+    },
   ]
 
-  // Bulk actions
-  const bulkActions = [
-    {
-      label: 'Delete Assets',
-      action: (ids) => {
-        if (confirm(`Are you sure you want to delete these ${ids.length} gallery images?`)) {
-          dispatch(bulkDeleteGalleryImages(ids))
-        }
-      },
-      variant: 'danger'
-    }
-  ]
-
-  // Filters Markup
-  const FiltersMarkup = (
-    <Select
-      value={categoryFilter}
-      onChange={(e) => setCategoryFilter(e.target.value)}
-      className="py-2.5 px-3 min-w-[140px] text-xs h-10"
-    >
-      <option value="all">All Categories</option>
-      <option value="Products">Products</option>
-      <option value="Factory">Factory / Plant</option>
-      <option value="Events">Dealer Events</option>
-    </Select>
-  )
+  if (isLoading) return <PageSkeleton />
+  if (isError) return <div className="text-sm font-bold text-rose-600">{error?.data?.message || 'Failed to load'}</div>
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border pb-4">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex justify-between items-center border-b border-border pb-4 gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-foreground font-display">Gallery CMS</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage factory, product, and dealer meet assets that display in the media gallery.</p>
+          <h1 className="text-3xl font-extrabold font-display">Gallery CMS</h1>
+          <p className="text-sm text-muted-foreground mt-1">Manage storefront gallery media.</p>
         </div>
-        <Button onClick={handleOpenAdd} className="flex items-center gap-2">
-          <Plus size={18} /> Add Photo Asset
+        <Button
+          onClick={() => {
+            setForm(empty)
+            setIsEditing(false)
+            setFormError('')
+            setModalOpen(true)
+          }}
+          className="flex items-center gap-2"
+        >
+          <Plus size={18} /> Add Image
         </Button>
       </div>
 
-      {/* Dynamic Data Table */}
-      <AdminTable
-        headers={headers}
-        data={filteredGallery}
-        searchPlaceholder="Search photos by title, category, URL..."
-        filters={FiltersMarkup}
-        bulkActions={bulkActions}
-        idField="id"
-        itemsPerPage={8}
-      />
+      <AdminTable headers={headers} data={items} searchPlaceholder="Search gallery..." idField="id" itemsPerPage={8} />
 
-      {/* ADD / EDIT MODAL */}
-      <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={isEditing ? 'Edit Photo Asset' : 'Upload Gallery Photo'}
-      >
-        <form onSubmit={handleSaveImage} className="space-y-4">
-          <Input
-            name="title"
-            label="Photo Caption / Title"
-            placeholder="e.g. Automated Packaging Machine"
-            value={formValues.title}
-            onChange={handleFormChange}
-            error={formErrors.title}
-            required
-          />
-
-          <Select
-            name="category"
-            label="Gallery Album"
-            value={formValues.category}
-            onChange={handleFormChange}
-          >
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={isEditing ? 'Edit Image' : 'Add Image'}>
+        <form onSubmit={save} className="space-y-4">
+          {formError && <p className="text-xs font-bold text-rose-600">{formError}</p>}
+          <Input name="title" label="Title" value={form.title} onChange={onChange} required />
+          <Input name="url" label="Image URL" value={form.url} onChange={onChange} required />
+          <Select name="category" label="Category" value={form.category} onChange={onChange}>
             <option value="Products">Products</option>
             <option value="Factory">Factory</option>
             <option value="Events">Events</option>
           </Select>
-
-          <Input
-            name="url"
-            label="Image URL Address"
-            placeholder="https://images.unsplash.com/photo-..."
-            value={formValues.url}
-            onChange={handleFormChange}
-            error={formErrors.url}
-            required
-          />
-
-          <div className="flex gap-2 justify-end border-t border-border pt-4 mt-2">
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit">
-              Save Photo Asset
-            </Button>
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
+            <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={creating || updating}>{creating || updating ? 'Saving…' : 'Save'}</Button>
           </div>
         </form>
-      </Modal>
-
-      {/* DETAILS VIEW / PREVIEW MODAL */}
-      <Modal
-        open={previewModalOpen}
-        onClose={() => setPreviewModalOpen(false)}
-        title={selectedImage?.title}
-      >
-        {selectedImage && (
-          <div className="space-y-4 text-xs font-semibold">
-            <div className="flex justify-center bg-muted/20 p-1.5 rounded-xl border border-border">
-              <img
-                src={selectedImage.url}
-                alt={selectedImage.title}
-                className="max-h-[300px] object-cover w-full rounded-lg"
-              />
-            </div>
-            
-            <div className="flex justify-between items-center bg-muted/40 p-2.5 rounded-xl border border-border">
-              <span>Category: <span className="font-bold text-foreground">{selectedImage.category}</span></span>
-              <span>Asset ID: <span className="font-bold text-foreground">{selectedImage.id}</span></span>
-            </div>
-
-            <div className="flex justify-end border-t border-border pt-4 mt-2">
-              <Button onClick={() => setPreviewModalOpen(false)}>Close Preview</Button>
-            </div>
-          </div>
-        )}
       </Modal>
     </div>
   )

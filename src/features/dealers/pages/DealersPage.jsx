@@ -1,142 +1,68 @@
-import React, { useState } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
-import { Eye, UserPlus, Trash2 } from 'lucide-react'
+import React, { useMemo, useState } from 'react'
+import { Eye, Trash2 } from 'lucide-react'
 import {
-  updateDealerStatus,
-  deleteDealer,
-  bulkDeleteDealers
-} from '../../../store/slices/dealersSlice'
-import { addUser } from '../../../store/slices/usersSlice'
+  useGetDealersQuery,
+  useSetDealerStatusMutation,
+  useDeleteDealerMutation,
+  useBulkDealersMutation,
+} from '../../../store/api/ops.api'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
 import Select from '../../../components/ui/Select'
 import Modal from '../../../components/ui/Modal'
 import AdminTable from '../../../components/shared/AdminTable'
+import PageSkeleton from '../../../components/shared/PageSkeleton'
 
 export default function DealersPage() {
-  const dispatch = useDispatch()
-  const dealers = useSelector(state => state.dealers.items)
-  const users = useSelector(state => state.users.items)
+  const { data: env, isLoading, isError, error } = useGetDealersQuery({ limit: 100 })
+  const [setDealerStatus, { isLoading: saving }] = useSetDealerStatusMutation()
+  const [deleteDealer] = useDeleteDealerMutation()
+  const [bulkDealers] = useBulkDealersMutation()
+  const dealers = env?.data || []
 
-  // Local States
-  const [selectedDealer, setSelectedDealer] = useState(null)
-  const [detailsModalOpen, setDetailsModalOpen] = useState(false)
-  const [statusModalOpen, setStatusModalOpen] = useState(false)
-  const [newStatus, setNewStatus] = useState('')
-
-  // Filter States
   const [statusFilter, setStatusFilter] = useState('all')
+  const [selected, setSelected] = useState(null)
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [statusOpen, setStatusOpen] = useState(false)
+  const [newStatus, setNewStatus] = useState('Pending')
 
-  // Apply filters
-  const filteredDealers = dealers.filter(d => {
-    return statusFilter === 'all' || d.status === statusFilter
-  })
+  const filtered = useMemo(
+    () => dealers.filter((d) => statusFilter === 'all' || d.status === statusFilter),
+    [dealers, statusFilter],
+  )
 
-  // Handlers
-  const handleOpenDetails = (dealer) => {
-    setSelectedDealer(dealer)
-    setDetailsModalOpen(true)
-  }
-
-  const handleOpenStatusModal = (dealer) => {
-    setSelectedDealer(dealer)
-    setNewStatus(dealer.status)
-    setStatusModalOpen(true)
-  }
-
-  const handleSaveStatus = (e) => {
-    e.preventDefault()
-    if (selectedDealer) {
-      dispatch(updateDealerStatus({ id: selectedDealer.id, status: newStatus }))
-      
-      // If approved and doesn't exist as user, we can prompt or automatically register
-      if (newStatus === 'Approved') {
-        const userExists = users.some(u => u.email === selectedDealer.email)
-        if (!userExists) {
-          // Add to system users slice as Distributor
-          dispatch(addUser({
-            name: selectedDealer.name,
-            email: selectedDealer.email,
-            phone: selectedDealer.phone,
-            role: 'Distributor',
-            status: 'Active'
-          }))
-        }
-      }
-      setStatusModalOpen(false)
-    }
-  }
-
-  const handleConvertToUser = (dealer) => {
-    const userExists = users.some(u => u.email === dealer.email)
-    if (userExists) {
-      alert('This distributor already has a registered user account!')
-      return
-    }
-
-    dispatch(addUser({
-      name: dealer.name,
-      email: dealer.email,
-      phone: dealer.phone,
-      role: 'Distributor',
-      status: 'Active'
-    }))
-
-    // Approve the dealer application status
-    dispatch(updateDealerStatus({ id: dealer.id, status: 'Approved' }))
-    alert(`Successfully created distributor user account for ${dealer.name}!`);
-    setDetailsModalOpen(false)
-  }
-
-  const handleDelete = (id) => {
-    if (confirm('Are you sure you want to delete this application?')) {
-      dispatch(deleteDealer(id))
-    }
-  }
-
-  // Table Headers
   const headers = [
     {
-      key: 'date',
-      label: 'Applied On',
+      key: 'dealerCode',
+      label: 'Code',
       sortable: true,
-      render: (val) => new Date(val).toLocaleDateString([], { dateStyle: 'medium' })
+      render: (val, row) => <span className="font-mono font-bold text-primary">{val || row.id}</span>,
     },
     {
-      key: 'businessName',
-      label: 'Distributor Agency',
+      key: 'name',
+      label: 'Applicant',
       sortable: true,
-      render: (val, row) => (
+      render: (_v, row) => (
         <div>
-          <p className="font-semibold text-foreground">{row.businessName}</p>
-          <p className="text-xs text-muted-foreground">Owner: {row.name}</p>
+          <p className="font-semibold">{row.name}</p>
+          <p className="text-xs text-muted-foreground">{row.businessName}</p>
         </div>
-      )
-    },
-    {
-      key: 'location',
-      label: 'Location/Territory',
-      sortable: true
-    },
-    {
-      key: 'investment',
-      label: 'Investment Cap',
-      sortable: true,
-      render: (val) => (
-        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-muted text-foreground border border-border">
-          {val}
-        </span>
-      )
+      ),
     },
     {
       key: 'email',
-      label: 'Contact Info',
-      render: (val, row) => (
+      label: 'Contact',
+      render: (_v, row) => (
         <div>
-          <p className="text-sm text-foreground">{row.email}</p>
+          <p className="text-sm">{row.email}</p>
           <p className="text-xs text-muted-foreground">{row.phone}</p>
         </div>
-      )
+      ),
+    },
+    {
+      key: 'location',
+      label: 'Location',
+      render: (_v, row) => row.location || [row.city, row.state].filter(Boolean).join(', ') || '—',
     },
     {
       key: 'status',
@@ -144,193 +70,116 @@ export default function DealersPage() {
       sortable: true,
       render: (val, row) => (
         <button
-          onClick={() => handleOpenStatusModal(row)}
-          className="cursor-pointer transition-transform active:scale-95 block"
-          title="Change Status"
+          onClick={() => {
+            setSelected(row)
+            setNewStatus(row.status)
+            setStatusOpen(true)
+          }}
+          className="cursor-pointer"
         >
           <Badge variant={val}>{val}</Badge>
         </button>
-      )
+      ),
     },
     {
       key: 'actions',
       label: 'Actions',
       align: 'right',
-      render: (val, row) => (
-        <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+      render: (_v, row) => (
+        <div className="flex justify-end gap-1.5">
           <button
-            onClick={() => handleOpenDetails(row)}
-            className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary-light rounded-lg transition-colors cursor-pointer"
-            title="View Details"
+            onClick={() => {
+              setSelected(row)
+              setDetailsOpen(true)
+            }}
+            className="p-1.5 hover:text-primary cursor-pointer"
           >
             <Eye size={16} />
           </button>
           <button
-            onClick={() => handleDelete(row.id)}
-            className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-colors cursor-pointer"
-            title="Delete Application"
+            onClick={() => {
+              if (confirm('Delete dealer application?')) deleteDealer(row.id)
+            }}
+            className="p-1.5 hover:text-red-500 cursor-pointer"
           >
             <Trash2 size={16} />
           </button>
         </div>
-      )
-    }
-  ]
-
-  // Bulk actions
-  const bulkActions = [
-    {
-      label: 'Approve Selected',
-      action: (ids) => {
-        ids.forEach(id => {
-          const item = dealers.find(d => d.id === id)
-          if (item) {
-            dispatch(updateDealerStatus({ id, status: 'Approved' }))
-            // Create user
-            dispatch(addUser({
-              name: item.name,
-              email: item.email,
-              phone: item.phone,
-              role: 'Distributor',
-              status: 'Active'
-            }))
-          }
-        })
-      },
-      variant: 'outline'
+      ),
     },
-    {
-      label: 'Delete Selected',
-      action: (ids) => {
-        if (confirm(`Are you sure you want to delete these ${ids.length} applications?`)) {
-          dispatch(bulkDeleteDealers(ids))
-        }
-      },
-      variant: 'danger'
-    }
   ]
 
-  // Filters Markup
-  const FiltersMarkup = (
-    <Select
-      value={statusFilter}
-      onChange={(e) => setStatusFilter(e.target.value)}
-      className="py-2.5 px-3 min-w-[140px] text-xs h-10"
-    >
-      <option value="all">All Applications</option>
-      <option value="Pending">Pending Review</option>
-      <option value="Approved">Approved Agencies</option>
-      <option value="Rejected">Rejected Applications</option>
-    </Select>
-  )
+  if (isLoading) return <PageSkeleton />
+  if (isError) return <div className="text-sm font-bold text-rose-600">{error?.data?.message || 'Failed to load'}</div>
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border pb-4">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-foreground font-display">Dealer Applications</h1>
-          <p className="text-sm text-muted-foreground mt-1">Review registrations, approve distribution territories, and provision accounts.</p>
-        </div>
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="border-b border-border pb-4">
+        <h1 className="text-3xl font-extrabold font-display">Dealer Applications</h1>
+        <p className="text-sm text-muted-foreground mt-1">Review distributor and dealer partnership requests.</p>
       </div>
 
-      {/* Dynamic Data Table */}
       <AdminTable
         headers={headers}
-        data={filteredDealers}
-        searchPlaceholder="Search by owner name, agency, locations, email..."
-        filters={FiltersMarkup}
-        bulkActions={bulkActions}
+        data={filtered}
+        searchPlaceholder="Search dealers..."
         idField="id"
-        itemsPerPage={10}
+        itemsPerPage={8}
+        bulkActions={[
+          {
+            label: 'Approve',
+            action: (ids) => bulkDealers({ action: 'status', ids, status: 'Approved' }),
+            variant: 'outline',
+          },
+          {
+            label: 'Delete',
+            action: (ids) => {
+              if (confirm(`Delete ${ids.length}?`)) bulkDealers({ action: 'delete', ids })
+            },
+            variant: 'danger',
+          },
+        ]}
+        filters={
+          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="py-2.5 px-3 text-xs h-10">
+            <option value="all">All Statuses</option>
+            <option value="Pending">Pending</option>
+            <option value="Approved">Approved</option>
+            <option value="Rejected">Rejected</option>
+          </Select>
+        }
       />
 
-      {/* DETAILS VIEW MODAL */}
-      <Modal
-        open={detailsModalOpen}
-        onClose={() => setDetailsModalOpen(false)}
-        title="Distributor Application Review"
-        className="max-w-lg"
-      >
-        {selectedDealer && (
-          <div className="space-y-4">
-            <div className="p-4 bg-muted/20 border border-border rounded-xl space-y-2">
-              <div className="flex justify-between items-center text-xs text-muted-foreground font-bold">
-                <span>BUSINESS ENTITY</span>
-                <span>STATUS: {selectedDealer.status}</span>
-              </div>
-              <h3 className="text-lg font-bold text-foreground font-display">{selectedDealer.businessName}</h3>
-              <p className="text-xs text-muted-foreground">Location: <span className="text-foreground font-bold">{selectedDealer.location}</span></p>
-              <p className="text-xs text-muted-foreground">Investment Cap: <span className="text-foreground font-bold">{selectedDealer.investment}</span></p>
-            </div>
-
-            <div>
-              <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">Applicant Contact</h4>
-              <div className="bg-card border border-border p-3 rounded-xl text-xs space-y-1">
-                <p className="font-bold text-foreground">{selectedDealer.name}</p>
-                <p className="text-muted-foreground">Email: {selectedDealer.email}</p>
-                <p className="text-muted-foreground">Phone: {selectedDealer.phone}</p>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">Proposal Pitch</h4>
-              <div className="bg-muted/10 border border-dashed border-border p-3.5 rounded-xl text-xs leading-relaxed text-foreground italic">
-                "{selectedDealer.message}"
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2 justify-between items-center border-t border-border pt-4 mt-2">
-              {/* Account Provision Shortcut */}
-              <Button
-                variant="outline"
-                className="flex items-center gap-1.5 text-xs py-2"
-                onClick={() => handleConvertToUser(selectedDealer)}
-              >
-                <UserPlus size={14} /> Provision Distributor User
-              </Button>
-              
-              <div className="flex gap-2">
-                <Button variant="secondary" onClick={() => setDetailsModalOpen(false)}>
-                  Close
-                </Button>
-              </div>
-            </div>
+      <Modal open={statusOpen} onClose={() => setStatusOpen(false)} title="Update Dealer Status">
+        <form
+          className="space-y-4"
+          onSubmit={async (e) => {
+            e.preventDefault()
+            await setDealerStatus({ id: selected.id, status: newStatus }).unwrap()
+            setStatusOpen(false)
+          }}
+        >
+          <Select value={newStatus} onChange={(e) => setNewStatus(e.target.value)} label="Status">
+            <option value="Pending">Pending</option>
+            <option value="Approved">Approved</option>
+            <option value="Rejected">Rejected</option>
+          </Select>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setStatusOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
           </div>
-        )}
+        </form>
       </Modal>
 
-      {/* STATUS ACTION MODAL */}
-      <Modal
-        open={statusModalOpen}
-        onClose={() => setStatusModalOpen(false)}
-        title="Review Application Status"
-      >
-        {selectedDealer && (
-          <form onSubmit={handleSaveStatus} className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Review agency application for <span className="font-bold text-foreground">{selectedDealer.businessName}</span>. Approving will automatically provision a Distributor user account if not already created.
-            </p>
-
-            <Select
-              label="Application Verdict"
-              value={newStatus}
-              onChange={(e) => setNewStatus(e.target.value)}
-            >
-              <option value="Pending">Pending (Under Review)</option>
-              <option value="Approved">Approved (Accredit Agency)</option>
-              <option value="Rejected">Rejected (Decline Application)</option>
-            </Select>
-
-            <div className="flex gap-2 justify-end border-t border-border pt-4 mt-2">
-              <Button variant="secondary" onClick={() => setStatusModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit">
-                Submit Verdict
-              </Button>
-            </div>
-          </form>
+      <Modal open={detailsOpen} onClose={() => setDetailsOpen(false)} title={selected?.businessName || 'Dealer'}>
+        {selected && (
+          <div className="space-y-2 text-sm">
+            <p><strong>{selected.name}</strong> — {selected.email}</p>
+            <p>{selected.phone}</p>
+            <p>Investment: {selected.investment || '—'}</p>
+            <p>Products: {(selected.interestedProducts || []).join(', ') || '—'}</p>
+            <p className="text-muted-foreground">{selected.message}</p>
+            <div className="flex justify-end pt-2"><Button onClick={() => setDetailsOpen(false)}>Close</Button></div>
+          </div>
         )}
       </Modal>
     </div>

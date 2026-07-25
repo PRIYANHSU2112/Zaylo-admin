@@ -1,5 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
-import UsersPage from '../features/users/pages/UsersPage'
+import { lazy } from 'react'
+
+const UsersPage = lazy(() => import('../features/users/pages/UsersPage'))
 
 export const Route = createFileRoute('/users')({
   component: UsersPage,

@@ -1,28 +1,20 @@
 import { configureStore } from '@reduxjs/toolkit'
-import productsReducer from './slices/productsSlice'
-import categoriesReducer from './slices/categoriesSlice'
-import ordersReducer from './slices/ordersSlice'
-import dealersReducer from './slices/dealersSlice'
-import bulkOrdersReducer from './slices/bulkOrdersSlice'
-import contactsReducer from './slices/contactsSlice'
-import blogsReducer from './slices/blogsSlice'
-import galleryReducer from './slices/gallerySlice'
-import bannersReducer from './slices/bannersSlice'
-import usersReducer from './slices/usersSlice'
-import settingsReducer from './slices/settingsSlice'
+import { setupListeners } from '@reduxjs/toolkit/query'
+import authReducer from './slices/authSlice'
+import { baseApi } from './api/baseApi'
+import './api/auth.api'
+import './api/catalog.api'
+import './api/ops.api'
+import './api/content.api'
+import './api/notifications.api'
 
 export const store = configureStore({
   reducer: {
-    products: productsReducer,
-    categories: categoriesReducer,
-    orders: ordersReducer,
-    dealers: dealersReducer,
-    bulkOrders: bulkOrdersReducer,
-    contacts: contactsReducer,
-    blogs: blogsReducer,
-    gallery: galleryReducer,
-    banners: bannersReducer,
-    users: usersReducer,
-    settings: settingsReducer
-  }
+    auth: authReducer,
+    [baseApi.reducerPath]: baseApi.reducer,
+  },
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware().concat(baseApi.middleware),
 })
+
+setupListeners(store.dispatch)

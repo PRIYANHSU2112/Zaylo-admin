@@ -1,27 +1,34 @@
-import React, { useState } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
+import React, { useMemo, useState } from 'react'
 import { Plus, Edit, Trash, Eye, AlertTriangle } from 'lucide-react'
 import {
-  addProduct,
-  editProduct,
-  deleteProduct,
-  toggleProductStatus,
-  bulkDeleteProducts,
-  bulkToggleProductStatus
-} from '../../../store/slices/productsSlice'
+  useGetProductsQuery,
+  useGetCategoriesQuery,
+  useCreateProductMutation,
+  useUpdateProductMutation,
+  useSetProductStatusMutation,
+  useDeleteProductMutation,
+  useBulkProductsMutation,
+} from '../../../store/api/catalog.api'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
 import { Input, Textarea } from '../../../components/ui/Input'
 import Select from '../../../components/ui/Select'
 import Modal from '../../../components/ui/Modal'
 import AdminTable from '../../../components/shared/AdminTable'
+import PageSkeleton from '../../../components/shared/PageSkeleton'
 
 export default function ProductsPage() {
-  const dispatch = useDispatch()
-  
-  // Select state from store
-  const products = useSelector(state => state.products.items)
-  const categories = useSelector(state => state.categories.items)
+  const { data: productsEnv, isLoading, isError, error } = useGetProductsQuery({ limit: 100 })
+  const { data: categoriesEnv } = useGetCategoriesQuery({ limit: 100 })
+  const [createProduct, { isLoading: creating }] = useCreateProductMutation()
+  const [updateProduct, { isLoading: updating }] = useUpdateProductMutation()
+  const [setProductStatus] = useSetProductStatusMutation()
+  const [deleteProductMut] = useDeleteProductMutation()
+  const [bulkProducts] = useBulkProductsMutation()
+
+  const products = productsEnv?.data || []
+  const categories = categoriesEnv?.data || []
+  const saving = creating || updating
 
   // Local Component States
   const [modalOpen, setModalOpen] = useState(false)
@@ -58,21 +65,19 @@ export default function ProductsPage() {
   const [formValues, setFormValues] = useState(initialFormState)
   const [formErrors, setFormErrors] = useState({})
 
-  // Apply filters at local selection level before passing to table
-  const filteredProducts = products.filter(p => {
-    const matchesCategory = selectedCategoryFilter === 'all' || p.category === selectedCategoryFilter
-    
+  const filteredProducts = useMemo(() => products.filter((p) => {
+    const matchesCategory =
+      selectedCategoryFilter === 'all' ||
+      p.category === selectedCategoryFilter ||
+      p.category === categories.find((c) => c.id === selectedCategoryFilter)?.slug
+
     let matchesStock = true
-    if (selectedStockFilter === 'instock') {
-      matchesStock = p.stock > 15
-    } else if (selectedStockFilter === 'lowstock') {
-      matchesStock = p.stock > 0 && p.stock <= 15
-    } else if (selectedStockFilter === 'outofstock') {
-      matchesStock = p.stock === 0
-    }
+    if (selectedStockFilter === 'instock') matchesStock = p.stock > 15
+    else if (selectedStockFilter === 'lowstock') matchesStock = p.stock > 0 && p.stock <= 15
+    else if (selectedStockFilter === 'outofstock') matchesStock = p.stock === 0
 
     return matchesCategory && matchesStock
-  })
+  }), [products, categories, selectedCategoryFilter, selectedStockFilter])
 
   // CRUD actions handlers
   const handleOpenAddModal = () => {
@@ -101,13 +106,13 @@ export default function ProductsPage() {
     setDetailsModalOpen(true)
   }
 
-  const handleToggleStatus = (id) => {
-    dispatch(toggleProductStatus(id))
+  const handleToggleStatus = async (id, current) => {
+    await setProductStatus({ id, status: current === 'Active' ? 'Inactive' : 'Active' })
   }
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (confirm('Are you sure you want to delete this product?')) {
-      dispatch(deleteProduct(id))
+      await deleteProductMut(id)
     }
   }
 
@@ -135,31 +140,44 @@ export default function ProductsPage() {
     return Object.keys(errors).length === 0
   }
 
-  const handleSaveProduct = (e) => {
+  const handleSaveProduct = async (e) => {
     e.preventDefault()
     if (!validateForm()) return
 
     const processedProduct = {
-      ...formValues,
+      name: formValues.name,
+      category: formValues.category,
       price: parseFloat(formValues.price),
       mrp: parseFloat(formValues.mrp),
       stock: parseInt(formValues.stock, 10),
-      ingredients: formValues.ingredients.split(',').map(i => i.trim()).filter(Boolean),
+      weight: formValues.weight,
+      flavor: formValues.flavor,
+      tagline: formValues.tagline,
+      description: formValues.description,
+      image: formValues.image,
+      status: formValues.status,
+      isVeg: formValues.isVeg,
+      isNew: formValues.isNew,
+      storage: formValues.storage,
+      ingredients: formValues.ingredients.split(',').map((i) => i.trim()).filter(Boolean),
       nutrition: {
-        calories: parseInt(formValues.calories, 10),
+        calories: parseInt(formValues.calories, 10) || 0,
         fat: formValues.fat,
         protein: formValues.protein,
-        carbs: formValues.carbs
+        carbs: formValues.carbs,
+      },
+    }
+
+    try {
+      if (isEditing) {
+        await updateProduct({ id: formValues.id, ...processedProduct }).unwrap()
+      } else {
+        await createProduct(processedProduct).unwrap()
       }
+      setModalOpen(false)
+    } catch (err) {
+      setFormErrors({ name: err?.data?.message || 'Failed to save product' })
     }
-
-    if (isEditing) {
-      dispatch(editProduct(processedProduct))
-    } else {
-      dispatch(addProduct(processedProduct))
-    }
-
-    setModalOpen(false)
   }
 
   // Define table headers
@@ -237,7 +255,7 @@ export default function ProductsPage() {
       sortable: true,
       render: (val, row) => (
         <button
-          onClick={() => handleToggleStatus(row.id)}
+          onClick={() => handleToggleStatus(row.id, val)}
           className="cursor-pointer transition-transform active:scale-95 block"
           title="Click to toggle status"
         >
@@ -277,23 +295,22 @@ export default function ProductsPage() {
     }
   ]
 
-  // Bulk Actions configs
   const bulkActions = [
     {
       label: 'Mark Active',
-      action: (ids) => dispatch(bulkToggleProductStatus({ ids, status: 'Active' })),
+      action: (ids) => bulkProducts({ action: 'status', ids, status: 'Active' }),
       variant: 'outline'
     },
     {
       label: 'Mark Inactive',
-      action: (ids) => dispatch(bulkToggleProductStatus({ ids, status: 'Inactive' })),
+      action: (ids) => bulkProducts({ action: 'status', ids, status: 'Inactive' }),
       variant: 'outline'
     },
     {
       label: 'Delete Selected',
       action: (ids) => {
         if (confirm(`Are you sure you want to delete these ${ids.length} products?`)) {
-          dispatch(bulkDeleteProducts(ids))
+          bulkProducts({ action: 'delete', ids })
         }
       },
       variant: 'danger'
@@ -310,7 +327,7 @@ export default function ProductsPage() {
       >
         <option value="all">All Categories</option>
         {categories.map((c) => (
-          <option key={c.id} value={c.id}>
+          <option key={c.id} value={c.slug || c.id}>
             {c.name}
           </option>
         ))}
@@ -327,6 +344,15 @@ export default function ProductsPage() {
       </Select>
     </div>
   )
+
+  if (isLoading) return <PageSkeleton />
+  if (isError) {
+    return (
+      <div className="text-sm font-bold text-rose-600">
+        {error?.data?.message || 'Failed to load products'}
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col">
@@ -379,8 +405,8 @@ export default function ProductsPage() {
               required
             >
               <option value="">Select Category</option>
-              {categories.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.slug || c.id}>{c.name}</option>
               ))}
             </Select>
           </div>
@@ -499,11 +525,11 @@ export default function ProductsPage() {
           </div>
 
           <div className="flex gap-2 justify-end border-t border-border pt-4 mt-2">
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>
+            <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit">
-              Save Product
+            <Button type="submit" disabled={saving}>
+              {saving ? 'Saving…' : 'Save Product'}
             </Button>
           </div>
         </form>
