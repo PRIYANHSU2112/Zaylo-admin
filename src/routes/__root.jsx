@@ -21,6 +21,7 @@ import {
   Palette,
   CheckCircle2,
   LogOut,
+  TicketPercent,
 } from 'lucide-react'
 import { logout } from '../store/slices/authSlice'
 import {
@@ -94,7 +95,9 @@ function RootLayout() {
     { to: '/contacts', label: 'General Contacts', icon: Mail, roles: ['Admin', 'Manager'] },
     { to: '/blogs', label: 'Blogs CMS', icon: FileText, roles: ['Admin', 'Manager'] },
     { to: '/gallery', label: 'Gallery CMS', icon: ImageIcon, roles: ['Admin', 'Manager'] },
-    { to: '/banners', label: 'Promo Banners', icon: Megaphone, roles: ['Admin', 'Manager'] },
+    { to: '/banners', label: 'Banners', icon: Megaphone, roles: ['Admin', 'Manager'] },
+    { to: '/bundles', label: 'Bundle Packs', icon: Package, roles: ['Admin', 'Manager'] },
+    { to: '/coupons', label: 'Coupons', icon: TicketPercent, roles: ['Admin', 'Manager'] },
     { to: '/users', label: 'User Roles', icon: Users, roles: ['Admin'] },
     { to: '/settings', label: 'Global Settings', icon: Settings, roles: ['Admin'] },
   ]
@@ -139,7 +142,7 @@ function RootLayout() {
             </span>
           </div>
         </div>
-        <nav className="flex-1 overflow-y-auto p-4 space-y-1">
+        <nav className="flex-1 overflow-y-auto overscroll-none p-4 space-y-1">
           <NavLinks />
         </nav>
         <div className="p-4 border-t border-border bg-card">
@@ -179,7 +182,7 @@ function RootLayout() {
                 <X size={18} />
               </button>
             </div>
-            <nav className="flex-1 overflow-y-auto space-y-1">
+            <nav className="flex-1 overflow-y-auto overscroll-none space-y-1">
               <NavLinks onNavigate={() => setMobileMenuOpen(false)} />
             </nav>
             <button
@@ -374,7 +377,7 @@ function RootLayout() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-5 lg:p-8 relative">
+        <div className="flex-1 overflow-y-auto overscroll-none p-5 lg:p-8 relative">
           <Suspense fallback={<PageSkeleton />}>
             <Outlet />
           </Suspense>

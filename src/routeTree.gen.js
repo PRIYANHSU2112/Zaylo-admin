@@ -17,8 +17,10 @@ import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GalleryRouteImport } from './routes/gallery'
 import { Route as DealersRouteImport } from './routes/dealers'
+import { Route as CouponsRouteImport } from './routes/coupons'
 import { Route as ContactsRouteImport } from './routes/contacts'
 import { Route as CategoriesRouteImport } from './routes/categories'
+import { Route as BundlesRouteImport } from './routes/bundles'
 import { Route as BulkOrdersRouteImport } from './routes/bulk-orders'
 import { Route as BlogsRouteImport } from './routes/blogs'
 import { Route as BannersRouteImport } from './routes/banners'
@@ -64,6 +66,11 @@ const DealersRoute = DealersRouteImport.update({
   path: '/dealers',
   getParentRoute: () => rootRouteImport,
 })
+const CouponsRoute = CouponsRouteImport.update({
+  id: '/coupons',
+  path: '/coupons',
+  getParentRoute: () => rootRouteImport,
+})
 const ContactsRoute = ContactsRouteImport.update({
   id: '/contacts',
   path: '/contacts',
@@ -72,6 +79,11 @@ const ContactsRoute = ContactsRouteImport.update({
 const CategoriesRoute = CategoriesRouteImport.update({
   id: '/categories',
   path: '/categories',
+  getParentRoute: () => rootRouteImport,
+})
+const BundlesRoute = BundlesRouteImport.update({
+  id: '/bundles',
+  path: '/bundles',
   getParentRoute: () => rootRouteImport,
 })
 const BulkOrdersRoute = BulkOrdersRouteImport.update({
@@ -100,8 +112,10 @@ const rootRouteChildren = {
   BannersRoute: BannersRoute,
   BlogsRoute: BlogsRoute,
   BulkOrdersRoute: BulkOrdersRoute,
+  BundlesRoute: BundlesRoute,
   CategoriesRoute: CategoriesRoute,
   ContactsRoute: ContactsRoute,
+  CouponsRoute: CouponsRoute,
   DealersRoute: DealersRoute,
   GalleryRoute: GalleryRoute,
   LoginRoute: LoginRoute,

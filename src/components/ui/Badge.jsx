@@ -20,7 +20,7 @@ export default function Badge({ children, variant = 'default', className }) {
     calculatedVariant = 'warning'
   } else if (['inactive', 'cancelled', 'rejected', 'suspended', 'out of stock', 'no', 'false'].includes(val)) {
     calculatedVariant = 'danger'
-  } else if (['shipped', 'read', 'replied'].includes(val)) {
+  } else if (['shipped', 'confirmed', 'packed', 'read', 'replied'].includes(val)) {
     calculatedVariant = 'info'
   } else if (['draft'].includes(val)) {
     calculatedVariant = 'default'

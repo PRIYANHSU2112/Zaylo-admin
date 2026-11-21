@@ -31,16 +31,42 @@ export const opsApi = baseApi.injectEndpoints({
           : [{ type: TAGS.Order, id: 'LIST' }],
     }),
     setOrderStatus: build.mutation({
-      query: ({ id, status }) => ({
+      query: ({ id, ...body }) => ({
         url: `/admin/orders/${id}/status`,
         method: 'PATCH',
-        body: { status },
+        body,
       }),
+      invalidatesTags: (_r, _e, arg) => [
+        { type: TAGS.Order, id: arg.id },
+        { type: TAGS.Order, id: 'LIST' },
+        { type: TAGS.Product, id: 'LIST' },
+        TAGS.Dashboard,
+      ],
+    }),
+    // Payment status is separate from fulfilment status (COD collected after dispatch).
+    setOrderPayment: build.mutation({
+      query: ({ id, ...body }) => ({ url: `/admin/orders/${id}/payment`, method: 'PATCH', body }),
       invalidatesTags: (_r, _e, arg) => [
         { type: TAGS.Order, id: arg.id },
         { type: TAGS.Order, id: 'LIST' },
         TAGS.Dashboard,
       ],
+    }),
+    getCoupons: build.query({
+      query: (params) => `/admin/coupons${toQuery(params)}`,
+      providesTags: [{ type: TAGS.Coupon, id: 'LIST' }],
+    }),
+    createCoupon: build.mutation({
+      query: (body) => ({ url: '/admin/coupons', method: 'POST', body }),
+      invalidatesTags: [{ type: TAGS.Coupon, id: 'LIST' }],
+    }),
+    updateCoupon: build.mutation({
+      query: ({ id, ...body }) => ({ url: `/admin/coupons/${id}`, method: 'PATCH', body }),
+      invalidatesTags: [{ type: TAGS.Coupon, id: 'LIST' }],
+    }),
+    deleteCoupon: build.mutation({
+      query: (id) => ({ url: `/admin/coupons/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: TAGS.Coupon, id: 'LIST' }],
     }),
     deleteOrder: build.mutation({
       query: (id) => ({ url: `/admin/orders/${id}`, method: 'DELETE' }),
@@ -150,6 +176,11 @@ export const opsApi = baseApi.injectEndpoints({
 export const {
   useGetDashboardQuery,
   useGetOrdersQuery,
+  useSetOrderPaymentMutation,
+  useGetCouponsQuery,
+  useCreateCouponMutation,
+  useUpdateCouponMutation,
+  useDeleteCouponMutation,
   useSetOrderStatusMutation,
   useDeleteOrderMutation,
   useBulkOrdersMutation,

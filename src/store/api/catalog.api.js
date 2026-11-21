@@ -100,6 +100,7 @@ export const catalogApi = baseApi.injectEndpoints({
       query: (body) => ({ url: '/admin/categories/bulk', method: 'POST', body }),
       invalidatesTags: [{ type: TAGS.Category, id: 'LIST' }],
     }),
+    /** Legacy multipart proxy (API → R2). Prefer presignUpload + completeUpload. */
     uploadFile: build.mutation({
       query: ({ file, folder = 'uploads' }) => {
         const body = new FormData()
@@ -107,6 +108,16 @@ export const catalogApi = baseApi.injectEndpoints({
         body.append('folder', folder)
         return { url: '/admin/uploads', method: 'POST', body }
       },
+    }),
+    presignUpload: build.mutation({
+      query: (body) => ({ url: '/admin/uploads/presign', method: 'POST', body }),
+    }),
+    completeUpload: build.mutation({
+      query: (body) => ({ url: '/admin/uploads/complete', method: 'POST', body }),
+    }),
+    // Remove a file we own from R2/S3 (server refuses URLs outside the media bucket)
+    deleteUpload: build.mutation({
+      query: (url) => ({ url: '/admin/uploads', method: 'DELETE', body: { url } }),
     }),
   }),
 })
@@ -125,4 +136,7 @@ export const {
   useDeleteCategoryMutation,
   useBulkCategoriesMutation,
   useUploadFileMutation,
+  usePresignUploadMutation,
+  useDeleteUploadMutation,
+  useCompleteUploadMutation,
 } = catalogApi

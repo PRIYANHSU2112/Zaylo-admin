@@ -5,19 +5,25 @@ import { logout } from '../store/slices/authSlice'
 
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: API_BASE_URL,
-  prepareHeaders: (headers, { getState, endpoint }) => {
+  prepareHeaders: (headers, { getState, endpoint, type, ...rest }) => {
     const token = getState().auth?.token
     if (token) headers.set('Authorization', `Bearer ${token}`)
-    // Let the browser set multipart boundary for uploads
-    if (endpoint === 'uploadFile') {
-      headers.delete('Content-Type')
-    }
     return headers
   },
 })
 
 export async function apiBaseQuery(args, api, extraOptions) {
-  const result = await rawBaseQuery(args, api, extraOptions)
+  // Ensure FormData uploads are not forced to application/json
+  const preparedArgs =
+    args && typeof args === 'object' && args.body instanceof FormData
+      ? { ...args, headers: { ...(args.headers || {}) } }
+      : args
+
+  if (preparedArgs?.body instanceof FormData && preparedArgs.headers) {
+    delete preparedArgs.headers['Content-Type']
+  }
+
+  const result = await rawBaseQuery(preparedArgs, api, extraOptions)
 
   if (result.error) {
     const status = result.error.status

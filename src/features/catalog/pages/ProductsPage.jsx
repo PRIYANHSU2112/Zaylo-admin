@@ -14,6 +14,7 @@ import Badge from '../../../components/ui/Badge'
 import { Input, Textarea } from '../../../components/ui/Input'
 import Select from '../../../components/ui/Select'
 import Modal from '../../../components/ui/Modal'
+import GalleryField from '../../../components/ui/GalleryField'
 import AdminTable from '../../../components/shared/AdminTable'
 import PageSkeleton from '../../../components/shared/PageSkeleton'
 
@@ -41,26 +42,32 @@ export default function ProductsPage() {
   const [selectedStockFilter, setSelectedStockFilter] = useState('all')
 
   // Form State
+  // Blank by default — never pre-fill prices, stock, weight or nutrition.
   const initialFormState = {
     name: '',
+    sku: '',
     category: '',
-    price: 5.00,
-    mrp: 5.00,
-    weight: '1 Pack',
-    image: 'https://images.unsplash.com/photo-1599490659213-e2b9527bd08c?q=80&w=300&auto=format&fit=crop',
+    price: '',
+    mrp: '',
+    weight: '',
+    images: [],
     tagline: '',
     description: '',
     flavor: '',
     isVeg: true,
     isNew: false,
-    stock: 100,
-    status: 'Active',
+    isPopular: false,
+    isFeatured: false,
+    homePosition: 0,
+    stock: '',
+    status: 'Inactive',
     ingredients: '',
     storage: '',
-    calories: 450,
-    fat: '20g',
-    protein: '5g',
-    carbs: '60g'
+    calories: '',
+    fat: '',
+    carbs: '',
+    seoTitle: '',
+    seoDescription: '',
   }
   const [formValues, setFormValues] = useState(initialFormState)
   const [formErrors, setFormErrors] = useState({})
@@ -75,6 +82,8 @@ export default function ProductsPage() {
     if (selectedStockFilter === 'instock') matchesStock = p.stock > 15
     else if (selectedStockFilter === 'lowstock') matchesStock = p.stock > 0 && p.stock <= 15
     else if (selectedStockFilter === 'outofstock') matchesStock = p.stock === 0
+    else if (selectedStockFilter === 'drafts') matchesStock = p.status !== 'Active'
+    else if (selectedStockFilter === 'featured') matchesStock = Boolean(p.isFeatured)
 
     return matchesCategory && matchesStock
   }), [products, categories, selectedCategoryFilter, selectedStockFilter])
@@ -90,11 +99,14 @@ export default function ProductsPage() {
   const handleOpenEditModal = (product) => {
     setFormValues({
       ...product,
+      sku: product.sku || '',
+      images: product.images?.length ? product.images : [product.image].filter(Boolean),
+      seoTitle: product.seoTitle || '',
+      seoDescription: product.seoDescription || '',
       ingredients: Array.isArray(product.ingredients) ? product.ingredients.join(', ') : product.ingredients || '',
-      calories: product.nutrition?.calories || 450,
-      fat: product.nutrition?.fat || '20g',
-      protein: product.nutrition?.protein || '5g',
-      carbs: product.nutrition?.carbs || '60g'
+      calories: product.nutrition?.calories ?? '',
+      fat: product.nutrition?.fat || '',
+      carbs: product.nutrition?.carbs || '',
     })
     setFormErrors({})
     setIsEditing(true)
@@ -130,11 +142,15 @@ export default function ProductsPage() {
 
   const validateForm = () => {
     const errors = {}
+    const publishing = formValues.status === 'Active'
     if (!formValues.name.trim()) errors.name = 'Product name is required'
-    if (!formValues.category) errors.category = 'Category is required'
-    if (formValues.price <= 0) errors.price = 'Price must be greater than 0'
-    if (formValues.mrp <= 0) errors.mrp = 'MRP must be greater than 0'
-    if (formValues.stock < 0) errors.stock = 'Stock cannot be negative'
+    if (formValues.price === '' || Number(formValues.price) < 0) errors.price = 'Enter the selling price'
+    if (formValues.mrp === '' || Number(formValues.mrp) < 0) errors.mrp = 'Enter the MRP'
+    if (Number(formValues.price) > Number(formValues.mrp)) errors.price = 'Selling price cannot exceed MRP'
+    if (formValues.stock !== '' && Number(formValues.stock) < 0) errors.stock = 'Stock cannot be negative'
+    if (publishing && !formValues.category) errors.category = 'Choose a category before publishing'
+    if (publishing && Number(formValues.price) <= 0) errors.price = 'Price must be above 0 to publish'
+    if (publishing && !formValues.images.length) errors.images = 'Upload at least one image before publishing'
     
     setFormErrors(errors)
     return Object.keys(errors).length === 0
@@ -147,23 +163,28 @@ export default function ProductsPage() {
     const processedProduct = {
       name: formValues.name,
       category: formValues.category,
+      sku: formValues.sku.trim(),
       price: parseFloat(formValues.price),
       mrp: parseFloat(formValues.mrp),
-      stock: parseInt(formValues.stock, 10),
+      stock: parseInt(formValues.stock, 10) || 0,
+      images: formValues.images,
+      isFeatured: formValues.isFeatured,
+      seoTitle: formValues.seoTitle.trim(),
+      seoDescription: formValues.seoDescription.trim(),
       weight: formValues.weight,
       flavor: formValues.flavor,
       tagline: formValues.tagline,
       description: formValues.description,
-      image: formValues.image,
       status: formValues.status,
       isVeg: formValues.isVeg,
       isNew: formValues.isNew,
+      isPopular: formValues.isPopular,
+      homePosition: parseInt(formValues.homePosition, 10) || 0,
       storage: formValues.storage,
       ingredients: formValues.ingredients.split(',').map((i) => i.trim()).filter(Boolean),
       nutrition: {
-        calories: parseInt(formValues.calories, 10) || 0,
+        calories: formValues.calories === '' ? null : parseInt(formValues.calories, 10),
         fat: formValues.fat,
-        protein: formValues.protein,
         carbs: formValues.carbs,
       },
     }
@@ -176,7 +197,8 @@ export default function ProductsPage() {
       }
       setModalOpen(false)
     } catch (err) {
-      setFormErrors({ name: err?.data?.message || 'Failed to save product' })
+      const details = err?.data?.error?.details
+      setFormErrors({ name: Array.isArray(details) && details.length ? details.join(', ') : err?.data?.message || 'Failed to save product' })
     }
   }
 
@@ -188,11 +210,16 @@ export default function ProductsPage() {
       sortable: true,
       render: (val, row) => (
         <div className="flex items-center gap-3">
-          <img
-            src={row.image || 'https://images.unsplash.com/photo-1599490659213-e2b9527bd08c?q=80&w=100&auto=format&fit=crop'}
-            alt={row.name}
-            className="w-10 h-10 object-cover rounded-lg border border-border"
-          />
+          {row.image ? (
+            <img src={row.image} alt={row.name} className="w-10 h-10 object-cover rounded-lg border border-border" />
+          ) : (
+            <span
+              className="w-10 h-10 rounded-lg border border-dashed border-border flex items-center justify-center text-[9px] font-bold text-muted-foreground"
+              title="No image uploaded"
+            >
+              NO IMG
+            </span>
+          )}
           <div>
             <p className="font-semibold text-foreground">{row.name}</p>
             <p className="text-xs text-muted-foreground">Slug: {row.slug}</p>
@@ -216,8 +243,8 @@ export default function ProductsPage() {
       sortable: true,
       render: (val, row) => (
         <div>
-          <p className="font-bold text-foreground">${parseFloat(val).toFixed(2)}</p>
-          <p className="text-xs text-muted-foreground line-through">MRP: ${parseFloat(row.mrp).toFixed(2)}</p>
+          <p className="font-bold text-foreground">₹{parseFloat(val).toFixed(2)}</p>
+          <p className="text-xs text-muted-foreground line-through">MRP: ₹{parseFloat(row.mrp).toFixed(2)}</p>
         </div>
       )
     },
@@ -341,6 +368,8 @@ export default function ProductsPage() {
         <option value="instock">In Stock (&gt;15)</option>
         <option value="lowstock">Low Stock (1-15)</option>
         <option value="outofstock">Out of Stock (0)</option>
+        <option value="drafts">Drafts (inactive)</option>
+        <option value="featured">Featured</option>
       </Select>
     </div>
   )
@@ -396,13 +425,20 @@ export default function ProductsPage() {
               error={formErrors.name}
               required
             />
+            <Input
+              name="sku"
+              label="SKU (optional)"
+              placeholder="e.g. ZL-ZIGZAC-01"
+              value={formValues.sku}
+              onChange={handleFormChange}
+              error={formErrors.sku}
+            />
             <Select
               name="category"
               label="Category"
               value={formValues.category}
               onChange={handleFormChange}
               error={formErrors.category}
-              required
             >
               <option value="">Select Category</option>
               {categories.map((c) => (
@@ -414,7 +450,7 @@ export default function ProductsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Input
               name="price"
-              label="Price ($)"
+              label="Selling price (₹)"
               type="number"
               step="0.01"
               value={formValues.price}
@@ -424,7 +460,7 @@ export default function ProductsPage() {
             />
             <Input
               name="mrp"
-              label="MRP ($)"
+              label="MRP (₹)"
               type="number"
               step="0.01"
               value={formValues.mrp}
@@ -439,15 +475,19 @@ export default function ProductsPage() {
               value={formValues.stock}
               onChange={handleFormChange}
               error={formErrors.stock}
-              required
             />
           </div>
+          {Number(formValues.mrp) > Number(formValues.price) && Number(formValues.price) > 0 && (
+            <p className="-mt-2 text-xs font-bold text-emerald-600">
+              Discount: {Math.round(((formValues.mrp - formValues.price) / formValues.mrp) * 100)}% off MRP
+            </p>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               name="weight"
-              label="Weight Descriptor"
-              placeholder="e.g. 1 Pack, 250g, 50g"
+              label="Weight / pack size"
+              placeholder="As printed on the pack, e.g. 18 g"
               value={formValues.weight}
               onChange={handleFormChange}
             />
@@ -478,31 +518,58 @@ export default function ProductsPage() {
           />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-border pt-3">
-            <Input
-              name="image"
-              label="Image URL"
-              value={formValues.image}
-              onChange={handleFormChange}
+            <GalleryField
+              value={formValues.images}
+              onChange={(images) => {
+                setFormValues((prev) => ({ ...prev, images }))
+                if (formErrors.images) setFormErrors((prev) => ({ ...prev, images: '' }))
+              }}
+              error={formErrors.images}
             />
             <Select
               name="status"
-              label="Initial Status"
+              label="Status"
               value={formValues.status}
               onChange={handleFormChange}
             >
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
+              <option value="Inactive">Draft (hidden from website)</option>
+              <option value="Active">Active (published)</option>
             </Select>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-border pt-3">
+            <label className="flex items-center gap-2 text-sm font-semibold self-end pb-2">
+              <input
+                type="checkbox"
+                name="isPopular"
+                checked={!!formValues.isPopular}
+                onChange={handleFormChange}
+              />
+              Show on homepage (Popular Products)
+            </label>
+            <label className="flex items-center gap-2 text-sm font-semibold self-end pb-2">
+              <input type="checkbox" name="isFeatured" checked={!!formValues.isFeatured} onChange={handleFormChange} />
+              Featured product (hero + Featured section)
+            </label>
+            <Input
+              name="homePosition"
+              label="Home position"
+              type="number"
+              min={0}
+              value={formValues.homePosition}
+              onChange={handleFormChange}
+            />
           </div>
 
           {/* Nutritional Configs */}
           <div className="border-t border-border pt-3">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-2">Nutritional Values</p>
-            <div className="grid grid-cols-4 gap-2">
-              <Input name="calories" label="Calories" type="number" value={formValues.calories} onChange={handleFormChange} />
-              <Input name="fat" label="Fat (g)" value={formValues.fat} onChange={handleFormChange} />
-              <Input name="protein" label="Protein (g)" value={formValues.protein} onChange={handleFormChange} />
-              <Input name="carbs" label="Carbs (g)" value={formValues.carbs} onChange={handleFormChange} />
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-2">
+              Nutrition (optional — copy exactly from the pack label, leave blank if unknown)
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              <Input name="calories" label="Energy (kcal)" type="number" min={0} value={formValues.calories} onChange={handleFormChange} />
+              <Input name="fat" label="Fat" value={formValues.fat} onChange={handleFormChange} />
+              <Input name="carbs" label="Carbohydrates" value={formValues.carbs} onChange={handleFormChange} />
             </div>
           </div>
 
@@ -520,6 +587,25 @@ export default function ProductsPage() {
               label="Storage Guidelines"
               placeholder="Store in cool, dry place."
               value={formValues.storage}
+              onChange={handleFormChange}
+            />
+          </div>
+
+          {/* SEO */}
+          <div className="grid grid-cols-1 gap-3 border-t border-border pt-3">
+            <Input
+              name="seoTitle"
+              label="SEO title (optional, ≤ 70 chars)"
+              maxLength={70}
+              value={formValues.seoTitle}
+              onChange={handleFormChange}
+            />
+            <Textarea
+              name="seoDescription"
+              label="SEO description (optional, ≤ 170 chars)"
+              maxLength={170}
+              rows={2}
+              value={formValues.seoDescription}
               onChange={handleFormChange}
             />
           </div>
@@ -563,9 +649,9 @@ export default function ProductsPage() {
               <div className="mt-2">
                 <p className="text-xs text-muted-foreground font-semibold">Pricing Structure</p>
                 <p className="font-bold text-foreground">
-                  Price: ${parseFloat(selectedProduct.price).toFixed(2)}{' '}
+                  Price: ₹{parseFloat(selectedProduct.price).toFixed(2)}{' '}
                   <span className="text-xs text-muted-foreground font-normal line-through">
-                    (MRP: ${parseFloat(selectedProduct.mrp).toFixed(2)})
+                    (MRP: ₹{parseFloat(selectedProduct.mrp).toFixed(2)})
                   </span>
                 </p>
               </div>
@@ -597,10 +683,6 @@ export default function ProductsPage() {
                   <div>
                     <span className="block font-bold text-foreground">{selectedProduct.nutrition.fat}</span>
                     <span className="text-[10px] text-muted-foreground uppercase">Fat</span>
-                  </div>
-                  <div>
-                    <span className="block font-bold text-foreground">{selectedProduct.nutrition.protein}</span>
-                    <span className="text-[10px] text-muted-foreground uppercase">Protein</span>
                   </div>
                   <div>
                     <span className="block font-bold text-foreground">{selectedProduct.nutrition.carbs}</span>

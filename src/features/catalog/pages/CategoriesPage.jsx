@@ -13,6 +13,7 @@ import Badge from '../../../components/ui/Badge'
 import { Input } from '../../../components/ui/Input'
 import Select from '../../../components/ui/Select'
 import Modal from '../../../components/ui/Modal'
+import ImageUploadField from '../../../components/ui/ImageUploadField'
 import AdminTable from '../../../components/shared/AdminTable'
 import PageSkeleton from '../../../components/shared/PageSkeleton'
 
@@ -27,7 +28,15 @@ export default function CategoriesPage() {
   const categories = env?.data || []
   const [modalOpen, setModalOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
-  const initialFormState = { id: '', name: '', color: 'from-brand-primary to-brand-orange', status: 'Active', comingSoon: false }
+  const initialFormState = {
+    id: '',
+    name: '',
+    color: 'from-brand-primary to-brand-orange',
+    image: '',
+    homePosition: 0,
+    status: 'Active',
+    comingSoon: false,
+  }
   const [formValues, setFormValues] = useState(initialFormState)
   const [formErrors, setFormErrors] = useState({})
 
@@ -39,7 +48,11 @@ export default function CategoriesPage() {
   }
 
   const handleOpenEditModal = (cat) => {
-    setFormValues(cat)
+    setFormValues({
+      ...initialFormState,
+      ...cat,
+      image: cat.image || '',
+    })
     setFormErrors({})
     setIsEditing(true)
     setModalOpen(true)
@@ -68,6 +81,8 @@ export default function CategoriesPage() {
     const body = {
       name: formValues.name,
       color: formValues.color,
+      image: formValues.image || '',
+      homePosition: parseInt(formValues.homePosition, 10) || 0,
       status: formValues.status,
       comingSoon: formValues.status === 'Inactive' || formValues.comingSoon,
     }
@@ -83,12 +98,23 @@ export default function CategoriesPage() {
   const headers = [
     {
       key: 'name',
-      label: 'Category Name',
+      label: 'Category',
       sortable: true,
-      render: (val, row) => (
-        <div>
-          <p className="font-semibold text-foreground">{row.name}</p>
-          <p className="text-xs text-muted-foreground">Slug: {row.slug}</p>
+      render: (_val, row) => (
+        <div className="flex items-center gap-3">
+          {row.image ? (
+            <img
+              src={row.image}
+              alt={row.name}
+              className="w-10 h-10 rounded-lg object-cover border border-border"
+            />
+          ) : (
+            <div className={`w-10 h-10 rounded-lg bg-gradient-to-r ${row.color || 'from-muted to-muted'}`} />
+          )}
+          <div>
+            <p className="font-semibold text-foreground">{row.name}</p>
+            <p className="text-xs text-muted-foreground">Slug: {row.slug}</p>
+          </div>
         </div>
       ),
     },
@@ -176,7 +202,21 @@ export default function CategoriesPage() {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={isEditing ? 'Edit Category' : 'Add Category'}>
         <form onSubmit={handleSaveCategory} className="space-y-4">
           <Input name="name" label="Category Name" value={formValues.name} onChange={handleFormChange} error={formErrors.name} required />
+          <ImageUploadField
+            label="Category Image"
+            folder="categories"
+            value={formValues.image || ''}
+            onChange={(url) => setFormValues((prev) => ({ ...prev, image: url }))}
+          />
           <Input name="color" label="Gradient Class" value={formValues.color} onChange={handleFormChange} />
+          <Input
+            name="homePosition"
+            label="Home position"
+            type="number"
+            min={0}
+            value={formValues.homePosition}
+            onChange={handleFormChange}
+          />
           <Select name="status" label="Status" value={formValues.status} onChange={handleFormChange}>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
@@ -190,3 +230,4 @@ export default function CategoriesPage() {
     </div>
   )
 }
+

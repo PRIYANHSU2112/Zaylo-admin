@@ -99,7 +99,7 @@ export const contentApi = baseApi.injectEndpoints({
       invalidatesTags: [{ type: TAGS.Announcement, id: 'LIST' }],
     }),
     getPromos: build.query({
-      query: () => '/admin/promos',
+      query: () => '/admin/promos?limit=100',
       providesTags: (result) =>
         result?.data
           ? [
@@ -126,6 +126,64 @@ export const contentApi = baseApi.injectEndpoints({
     deletePromo: build.mutation({
       query: (id) => ({ url: `/admin/promos/${id}`, method: 'DELETE' }),
       invalidatesTags: [{ type: TAGS.Promo, id: 'LIST' }],
+    }),
+    getLandingImages: build.query({
+      query: (params) => `/admin/landing-images${toQuery(params)}`,
+      providesTags: (result) =>
+        result?.data
+          ? [
+              ...result.data.map((i) => ({ type: TAGS.LandingImage, id: i.id })),
+              { type: TAGS.LandingImage, id: 'LIST' },
+            ]
+          : [{ type: TAGS.LandingImage, id: 'LIST' }],
+    }),
+    createLandingImage: build.mutation({
+      query: (body) => ({ url: '/admin/landing-images', method: 'POST', body }),
+      invalidatesTags: [{ type: TAGS.LandingImage, id: 'LIST' }],
+    }),
+    updateLandingImage: build.mutation({
+      query: ({ id, ...body }) => ({
+        url: `/admin/landing-images/${id}`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: (_r, _e, arg) => [
+        { type: TAGS.LandingImage, id: arg.id },
+        { type: TAGS.LandingImage, id: 'LIST' },
+      ],
+    }),
+    deleteLandingImage: build.mutation({
+      query: (id) => ({ url: `/admin/landing-images/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: TAGS.LandingImage, id: 'LIST' }],
+    }),
+    getBundles: build.query({
+      query: (params) => `/admin/bundles${toQuery(params)}`,
+      providesTags: (result) =>
+        result?.data
+          ? [
+              ...result.data.map((b) => ({ type: TAGS.Bundle, id: b.id })),
+              { type: TAGS.Bundle, id: 'LIST' },
+            ]
+          : [{ type: TAGS.Bundle, id: 'LIST' }],
+    }),
+    createBundle: build.mutation({
+      query: (body) => ({ url: '/admin/bundles', method: 'POST', body }),
+      invalidatesTags: [{ type: TAGS.Bundle, id: 'LIST' }],
+    }),
+    updateBundle: build.mutation({
+      query: ({ id, ...body }) => ({
+        url: `/admin/bundles/${id}`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: (_r, _e, arg) => [
+        { type: TAGS.Bundle, id: arg.id },
+        { type: TAGS.Bundle, id: 'LIST' },
+      ],
+    }),
+    deleteBundle: build.mutation({
+      query: (id) => ({ url: `/admin/bundles/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: TAGS.Bundle, id: 'LIST' }],
     }),
     getSettings: build.query({
       query: () => '/admin/settings',
@@ -196,6 +254,14 @@ export const {
   useCreatePromoMutation,
   useUpdatePromoMutation,
   useDeletePromoMutation,
+  useGetLandingImagesQuery,
+  useCreateLandingImageMutation,
+  useUpdateLandingImageMutation,
+  useDeleteLandingImageMutation,
+  useGetBundlesQuery,
+  useCreateBundleMutation,
+  useUpdateBundleMutation,
+  useDeleteBundleMutation,
   useGetSettingsQuery,
   useUpdateSettingsMutation,
   useGetCmsQuery,

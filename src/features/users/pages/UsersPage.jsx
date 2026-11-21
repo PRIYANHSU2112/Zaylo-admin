@@ -31,13 +31,14 @@ export default function UsersPage() {
   const [bulkUsers] = useBulkUsersMutation()
   const users = env?.data || []
 
-  if (role && !isAdmin) return <Navigate to="/" />
-
   const empty = { id: '', name: '', email: '', phone: '', role: 'Customer', status: 'Active', password: '' }
   const [modalOpen, setModalOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [form, setForm] = useState(empty)
   const [formError, setFormError] = useState('')
+
+  // Hooks above must run unconditionally (rules of hooks); redirect non-admins after them.
+  if (role && !isAdmin) return <Navigate to="/" />
 
   const onChange = (e) => setForm((p) => ({ ...p, [e.target.name]: e.target.value }))
 

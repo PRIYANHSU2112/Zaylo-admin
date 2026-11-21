@@ -12,12 +12,15 @@ export const TAGS = {
   Gallery: 'Gallery',
   Announcement: 'Announcement',
   Promo: 'Promo',
+  LandingImage: 'LandingImage',
+  Bundle: 'Bundle',
   User: 'User',
   Settings: 'Settings',
   Cms: 'Cms',
   Dashboard: 'Dashboard',
   Notification: 'Notification',
   Auth: 'Auth',
+  Coupon: 'Coupon',
 }
 
 export const baseApi = createApi({

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { Search, ChevronUp, ChevronDown } from 'lucide-react'
 import Button from '../ui/Button'
 import { cn } from '../../utils/cn'
@@ -12,13 +12,23 @@ export default function AdminTable({
   loading = false,
   emptyMessage = 'No records found matching your filters.',
   idField = 'id',
-  itemsPerPage = 10
+  itemsPerPage = 10,
+  /** Server mode: { page, limit, total, onPageChange(page), onSearch(term) } — no client slicing/filtering. */
+  server = null,
 }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedIds, setSelectedIds] = useState([])
   const [sortKey, setSortKey] = useState('')
   const [sortOrder, setSortOrder] = useState('asc')
-  const [currentPage, setCurrentPage] = useState(1)
+  const [localPage, setLocalPage] = useState(1)
+  const currentPage = server ? server.page : localPage
+  const setCurrentPage = (next) => {
+    const value = typeof next === 'function' ? next(currentPage) : next
+    if (server) server.onPageChange(value)
+    else setLocalPage(value)
+  }
+  const searchTimer = useRef(null)
+  useEffect(() => () => clearTimeout(searchTimer.current), [])
 
   // Clear selections when data resets or page changes
   const handleSelectAll = (e) => {
@@ -46,7 +56,7 @@ export default function AdminTable({
 
   // 1. Search filter
   const searchedData = useMemo(() => {
-    if (!searchTerm) return data
+    if (server || !searchTerm) return data
     const term = searchTerm.toLowerCase()
     return data.filter(row => 
       Object.keys(row).some(key => {
@@ -79,15 +89,19 @@ export default function AdminTable({
   }, [searchedData, sortKey, sortOrder])
 
   // 3. Pagination
-  const totalPages = Math.ceil(filteredSortedData.length / itemsPerPage)
+  const pageSize = server ? server.limit : itemsPerPage
+  const totalPages = server
+    ? Math.ceil((server.total || 0) / server.limit)
+    : Math.ceil(filteredSortedData.length / itemsPerPage)
   const paginatedData = useMemo(() => {
+    if (server) return filteredSortedData
     const start = (currentPage - 1) * itemsPerPage
     return filteredSortedData.slice(start, start + itemsPerPage)
-  }, [filteredSortedData, currentPage, itemsPerPage])
+  }, [filteredSortedData, currentPage, itemsPerPage, server])
 
-  const totalCount = filteredSortedData.length
-  const startIndex = (currentPage - 1) * itemsPerPage + 1
-  const endIndex = Math.min(startIndex + itemsPerPage - 1, totalCount)
+  const totalCount = server ? server.total || 0 : filteredSortedData.length
+  const startIndex = (currentPage - 1) * pageSize + 1
+  const endIndex = Math.min(startIndex + pageSize - 1, totalCount)
 
   const isAllSelected = paginatedData.length > 0 && paginatedData.every(item => selectedIds.includes(item[idField]))
 
@@ -104,8 +118,14 @@ export default function AdminTable({
             className="w-full pl-10 pr-4 py-2.5 bg-card border border-border rounded-xl text-sm outline-none focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all shadow-sm text-foreground"
             value={searchTerm}
             onChange={(e) => {
-              setSearchTerm(e.target.value)
-              setCurrentPage(1) // Reset to page 1 on search
+              const value = e.target.value
+              setSearchTerm(value)
+              if (server) {
+                clearTimeout(searchTimer.current)
+                searchTimer.current = setTimeout(() => server.onSearch?.(value.trim()), 350)
+              } else {
+                setCurrentPage(1) // Reset to page 1 on search
+              }
             }}
           />
         </div>

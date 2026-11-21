@@ -9,6 +9,14 @@ import zigZacImg from '../../../assets/products/zig-zac.png'
 import noodlesImg from '../../../assets/products/noodles.png'
 import moonLiteImg from '../../../assets/products/moon-lite.png'
 
+// Seed-account shortcuts exist only in `vite dev`; the whole branch is stripped from production builds.
+const DEV_DEMO = import.meta.env.DEV
+  ? {
+      Admin: { email: 'admin@zaylo.com', password: 'Admin123!' },
+      Manager: { email: 'manager@zaylo.com', password: 'Manager123!' },
+    }
+  : null
+
 export default function LoginPage() {
   const navigate = useNavigate()
   const isAuthenticated = useSelector((s) => s.auth.isAuthenticated)
@@ -18,7 +26,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [role, setRole] = useState('Admin')
   const [showPassword, setShowPassword] = useState(false)
-  const [rememberMe, setRememberMe] = useState(true)
   const [errors, setErrors] = useState({})
   const [apiError, setApiError] = useState('')
 
@@ -33,7 +40,6 @@ export default function LoginPage() {
         email: payload.email,
         password: payload.password,
         role: payload.role,
-        rememberMe,
       }).unwrap()
       navigate({ to: '/' })
     } catch (err) {
@@ -60,9 +66,8 @@ export default function LoginPage() {
   }
 
   const handleQuickLogin = (selectedRole) => {
-    if (isLoading) return
-    const demoEmail = selectedRole === 'Admin' ? 'admin@zaylo.com' : 'manager@zaylo.com'
-    const demoPassword = selectedRole === 'Admin' ? 'Admin123!' : 'Manager123!'
+    if (isLoading || !DEV_DEMO) return
+    const { email: demoEmail, password: demoPassword } = DEV_DEMO[selectedRole]
     setEmail(demoEmail)
     setPassword(demoPassword)
     setRole(selectedRole)
@@ -164,9 +169,7 @@ export default function LoginPage() {
               <div className="space-y-1.5">
                 <div className="flex justify-between items-center">
                   <label className="text-xs font-bold text-slate-600">Password</label>
-                  <a href="#forgot" className="text-xs font-bold text-primary hover:underline" onClick={(e) => e.preventDefault()}>
-                    Forgot Password?
-                  </a>
+                  <span className="text-[11px] font-semibold text-slate-400">Forgot it? Ask an Admin to reset it.</span>
                 </div>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
@@ -201,16 +204,7 @@ export default function LoginPage() {
               </div>
 
               <div className="flex items-center justify-between border-t border-slate-100 pt-3">
-                <label className="flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    disabled={isLoading}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    className="rounded border-slate-300 text-primary focus:ring-primary w-4 h-4 cursor-pointer accent-primary"
-                  />
-                  Remember me
-                </label>
+                <span className="text-[11px] font-semibold text-slate-400">Session ends when this tab closes</span>
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] font-extrabold text-slate-400 uppercase">Role:</span>
                   <select
@@ -244,9 +238,10 @@ export default function LoginPage() {
               </Button>
             </form>
 
+            {DEV_DEMO && (
             <div className="border-t border-slate-100 mt-5 pt-4">
               <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 mb-2 px-1">
-                One-Click Quick Login
+                Dev-only Quick Login (seed accounts)
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -269,6 +264,7 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+            )}
 
             <div className="flex items-center justify-center gap-1.5 mt-5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
               <ShieldCheck size={14} className="text-emerald-600" />
